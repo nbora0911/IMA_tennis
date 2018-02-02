@@ -1,0 +1,348 @@
+---
+title: "Final Logistic"
+author: "Dara Zirlin"
+date: "July 23, 2017"
+output: html_document
+---
+
+# Load needed packages and csv files
+```{r}
+
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(mosaic))
+
+
+
+
+setwd('C:/Users/DaraZ/Documents/IMA/tennis')
+train <- read.csv('train_dataset20002013_1Jul15.csv')
+
+valid<- read.csv('valid_dataset20142015_1Jul15.csv')
+
+test<-read.csv('test_dataset20162017.csv')
+all<-rbind(train,valid,test)
+
+train<-train%>%mutate_if(is.factor,as.character)
+valid<-valid%>%mutate_if(is.factor,as.character)
+test<-test%>%mutate_if(is.factor,as.character)
+
+train<-na.omit(train)
+valid<-na.omit(valid)
+test<-na.omit(test)
+
+valid[valid==""]<-NA
+```
+
+
+# Needed functions
+```{r}
+
+#This function outputs player as player1
+p1constant <- function(traindata,player){
+  p1data <- traindata %>% filter(Player_1 == player | Player_2 == player)
+
+for(p in  1:nrow(p1data)){  
+  if (p1data[p,]$Player_2 == player){
+  a=p1data[p,]$Player_1
+  b=p1data[p,]$Player_2
+  
+  p1data[p,]$Player_1=b
+  p1data[p,]$Player_2=a
+  
+  if (p1data[p,]$won == 0){p1data[p,]$won=1} else {p1data[p,]$won=0}
+ 
+  
+ colns1 <- c('age_diff', 'rankpts_diff', 'ranks_diff','ratio_ace_diff','ratio_1stIn_diff','ratio_1stWon_diff','ratio_2ndWon_diff')
+  
+ p1data[p,colns1 ]=-p1data[p,colns1 ]
+  }
+}
+  return(p1data)
+}
+
+
+
+
+
+
+```
+
+# specific player data
+```{r}
+roger<-p1constant(train,"Roger Federer")
+roger_valid<-p1constant(valid,"Roger Federer")
+roger_test<-p1constant(test,"Roger Federer")
+
+
+andy<-p1constant(train,"Andy Murray")
+andy_valid<-p1constant(valid,"Andy Murray")
+andy_test<-p1constant(test,"Andy Murray")
+
+
+
+nadal<-p1constant(train,"Rafael Nadal")
+nadal_valid<-p1constant(valid,"Rafael Nadal")
+nadal_test<-p1constant(test,"Rafael Nadal")
+
+```
+
+# Rank comparison on the general model
+```{r}
+
+# Store the predicition of rank comparison
+predict_joe<-valid%>%mutate(predict=(ranks_diff<=0))
+
+# Calculate the proportion predicted correctly in the validation set
+1-sum((predict_joe$predict-valid$won)^2)/length(valid$won)
+
+
+
+```
+
+
+
+# Best Logistic Model on the General Dataset
+```{r}
+
+#Fit the model
+mod <- glm(won~ranks_diff+rankpts_diff+ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff+avg_brkpt_converted+surface, train,family="binomial")
+
+summary(mod)
+
+# create a function based off of the model
+probFun <- makeFun(mod)
+
+#Store the predicted probabilities of a player winning the match from the validation set
+prediction<-valid%>%mutate(predict=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff)>.5)
+
+# Store the predicition of the match
+prediction<-prediction%>%mutate(probPrediction=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff))
+
+#Calculate the proportion predicted correctly in the validation set
+1-sum((prediction$predict[!is.na(prediction$predict)]-prediction$won[!is.na(prediction$predict)])^2)/length(prediction$predict[!is.na(prediction$predict)])
+
+
+
+
+# turn winning into a factor
+
+prediction$won<-as.factor(prediction$won)
+
+
+# plot the probability of winning vs if a player won
+ggplot(prediction, aes(x=probPrediction, fill=won)) +
+  geom_density(alpha=.5)+labs(x="Prdicted Probability",title="General Population Predicition")+scale_fill_manual(labels = c("lost", "won"),values=c("cyan","pink")) 
+
+
+
+
+
+
+
+
+```
+
+
+
+#  Best Logisitic Model on the General dataset not using rank
+```{r}
+
+# fit the model
+mod <- glm(won~ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff+avg_brkpt_converted+surface, train,family="binomial")
+
+summary(mod)
+
+# create a function based off of the model
+probFun <- makeFun(mod)
+
+#Store the predicted probabilities of a player winning the match from the validation set
+prediction<-valid%>%mutate(predict=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff)>.5)
+
+#Calculate the proportion predicted correctly in the validation set
+1-sum((prediction$predict[!is.na(prediction$predict)]-prediction$won[!is.na(prediction$predict)])^2)/length(prediction$predict[!is.na(prediction$predict)])
+
+```
+
+# Rank Comparison Model on Roger Federer
+```{r}
+
+
+# Store the predicition of rank comparison
+predict_joe<-roger_valid%>%mutate(predict=(ranks_diff<=0))
+
+# Calculate the proportion predicted correctly in the validation set
+1-sum((predict_joe$predict-roger_valid$won)^2)/length(roger_valid$won)
+
+
+
+
+```
+
+
+
+
+
+#  Roger Federer  Logistic Model with rank
+```{r}
+
+# fit the model
+mod <- glm(won~rankpts_diff+ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff+age_diff, roger,family="binomial")
+
+summary(mod)
+
+# create a function based off the model
+probFun <- makeFun(mod)
+
+#Store the predicted probabilities of a player winning the match from the validation set
+prediction<-roger_valid%>%mutate(predict=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff)>.5)
+
+#Calculate the proportion predicted correctly in the validation set
+1-sum((prediction$predict[!is.na(prediction$predict)]-prediction$won[!is.na(prediction$predict)])^2)/length(prediction$predict[!is.na(prediction$predict)])
+
+```
+
+
+
+#   Roger Federed Logistic Model without ranks
+```{r}
+
+# fit the model
+mod <- glm(won~ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff+age_diff, roger,family="binomial")
+
+summary(mod)
+
+# create a function based off the model
+probFun <- makeFun(mod)
+
+
+#Store the predicted probabilities of a player winning the match from the validation set
+prediction<-roger_valid%>%mutate(predict=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff)>.5)
+
+
+
+#Calculate the proportion predicted correctly in the validation set
+1-sum((prediction$predict[!is.na(prediction$predict)]-prediction$won[!is.na(prediction$predict)])^2)/length(prediction$predict[!is.na(prediction$predict)])
+
+```
+
+
+# Rank Comparison Model of Andy Murray
+```{r}
+
+
+
+# Store the predicition of rank comparison
+predict_joe<-andy_valid%>%mutate(predict=(ranks_diff<=0))
+
+# Calculate the proportion predicted correctly in the validation set
+1-sum((predict_joe$predict-andy_valid$won)^2)/length(andy_valid$won)
+
+
+
+
+
+
+```
+
+#   Andy Murray Logistic Model  with rank
+```{r}
+
+#fit the model
+mod <- glm(won~rankpts_diff+ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff, andy,family="binomial")
+
+summary(mod)
+
+# create a function based off of the model
+probFun <- makeFun(mod)
+
+
+#Store the predicted probabilities of a player winning the match from the validation set
+prediction<-andy_valid%>%mutate(predict=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff)>.5)
+
+
+#Calculate the proportion predicted correctly in the validation set
+1-sum((prediction$predict[!is.na(prediction$predict)]-prediction$won[!is.na(prediction$predict)])^2)/length(prediction$predict[!is.na(prediction$predict)])
+
+```
+
+
+
+#   Andy Murray Logistic Model  without rank
+```{r}
+
+#fit the model
+mod <- glm(won~ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff+hands+age_diff, andy,family="binomial")
+
+summary(mod)
+
+# create a function based off of the model
+probFun <- makeFun(mod)
+
+#Store the predicted probabilities of a player winning the match from the validation set
+prediction<-andy_valid%>%mutate(predict=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff)>.5)
+
+
+
+#Calculate the proportion predicted correctly in the validation set
+1-sum((prediction$predict[!is.na(prediction$predict)]-prediction$won[!is.na(prediction$predict)])^2)/length(prediction$predict[!is.na(prediction$predict)])
+
+```
+
+# Rank Comparison Model on Rafael Nadal
+```{r}
+
+
+# Store the predicition of rank comparison
+predict_joe<-nadal_valid%>%mutate(predict=(ranks_diff<=0))
+
+# Calculate the proportion predicted correctly in the validation set
+1-sum((predict_joe$predict-nadal_valid$won)^2)/length(nadal_valid$won)
+
+```
+
+#  Rafael Nadal Logistic Model with ranks
+```{r}
+
+#fit the model
+mod <- glm(won~rankpts_diff+surface+age_diff, nadal,family="binomial")
+
+summary(mod)
+
+# create a function based off of the model
+probFun <- makeFun(mod)
+
+#Store the predicted probabilities of a player winning the match from the validation set
+prediction<-nadal_test%>%mutate(predict=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff)>.5)
+
+
+
+#Calculate the proportion predicted correctly in the validation set
+1-sum((prediction$predict[!is.na(prediction$predict)]-prediction$won[!is.na(prediction$predict)])^2)/length(prediction$predict[!is.na(prediction$predict)])
+
+```
+
+
+
+
+
+#  Rafael Nadal Logistic Model without ranks
+```{r}
+
+#fit the model
+mod <- glm(won~ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff+surface+age_diff, nadal,family="binomial")
+
+summary(mod)
+
+# create a function based off of the model
+probFun <- makeFun(mod)
+
+#Store the predicted probabilities of a player winning the match from the validation set
+prediction<-nadal_test%>%mutate(predict=probFun(ratio_1stWon_diff=ratio_1stWon_diff,avg_brkpt_converted=avg_brkpt_converted,ratio_2ndWon_diff=ratio_2ndWon_diff,ranks_diff=ranks_diff,rankpts_diff=rankpts_diff,log_rankpts_diff=log_rankpts_diff,ratio_1stIn_diff=ratio_1stIn_diff,surface=surface,hands=hands,ratio_ace_diff=ratio_ace_diff,age_diff=age_diff)>.5)
+
+
+
+#Calculate the proportion predicted correctly in the validation set
+1-sum((prediction$predict[!is.na(prediction$predict)]-prediction$won[!is.na(prediction$predict)])^2)/length(prediction$predict[!is.na(prediction$predict)])
+
+```

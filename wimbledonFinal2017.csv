@@ -1,0 +1,2 @@
+"","X","tourney_date","match_num","Player_1","Player_2","surface","hands","age_diff","log_rankpts_diff","rankpts_diff","ranks_diff","ratio_ace_diff","ratio_1stIn_diff","ratio_1stWon_diff","ratio_2ndWon_diff","avg_brkpt_converted","won","won_factor"
+"1",100,20170716,100,"Roger Federer","Marin Cilic","Grass",TRUE,7.1403148528,-0.563067104402159,-1510,9,-0.026866045891359,0.0674828618411086,0.0590103157267279,-0.0173914067798974,-2.28223180936804,0,0

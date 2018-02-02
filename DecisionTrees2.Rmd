@@ -1,0 +1,496 @@
+---
+title: "Classification Trees - Tennis - Day 2"
+author: "Missy Gaddy"
+date: "7/15/2017"
+output: html_document
+---
+
+** Models without Rank - all Players 
+
+Get data and package
+```{r}
+#install.packages("tree")
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tree))
+suppressPackageStartupMessages(library(ggplot2))
+#setwd("/Users/checkout/Google Drive/Summer 2017/Math to Industry Bootcamp/Project 1 - Tennis/IMA_BootCamp_Project1")
+
+# Loading training and validation data for all players (with breakpoint info)
+data_train_all <- read.csv("train_dataset20002013_1Jul15.csv")
+data_validate_all <- read.csv("valid_dataset20142015_1Jul15.csv")
+
+
+```
+
+
+Adding a row with the Bradley-Terry probability:
+```{r}
+
+data_raw <- read.csv('raw_dataset20002013.csv')
+
+data_raw <- data_raw%>% mutate(winner_p1 = winner_rank/(winner_rank + loser_rank), loser_p1 = loser_rank/(winner_rank+loser_rank)) %>% mutate(BTpred = ifelse(winner_p1 >loser_p1, 0,1))
+
+sum(na.omit(data_raw$BTpred))/length(na.omit(data_raw$BTpred))
+```
+
+
+```{r}
+# make "won" into a factor for datasets 
+
+data_train_all <- data_train_all %>% mutate(won_factor = factor(won))
+data_validate_all <- data_validate_all %>% mutate(won_factor = factor(won))
+
+
+```
+
+** Model with all factors minus rank, rankpts, and log_rankpts
+```{r}
+tree.tennis_all_noRank = tree(won_factor ~ surface + hands  + age_diff + ratio_ace_diff + ratio_1stIn_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted, data=data_train_all)
+summary(tree.tennis_all_noRank)
+tree.tennis_all_noRank
+
+# Make prediction
+prediction <- predict(tree.tennis_all_noRank, data_validate_all,type = "class") # gives the probability 
+table(prediction,data_validate_all$won_factor)
+
+# Plotting the tree
+plot(tree.tennis_all_noRank)
+text(tree.tennis_all_noRank, pretty = 0)
+```
+
+
+```{r}
+(803+2207)/(803+2207+680+2084)
+```
+
+Looking at if we should prune. Here is the number of nodes vs. the cross-validation error:
+```{r}
+cv.tennis_all_noRank = cv.tree(tree.tennis_all_noRank, FUN = prune.misclass)
+plot(cv.tennis_all_noRank$size, cv.tennis_all_noRank$dev, type="b")
+```
+
+Now pruning down to 8 nodes
+
+```{r}
+prune.tennis_all_noRank = prune.misclass(tree.tennis_all_noRank, best = 8)
+prediction_pruned_all_noRank <- predict(prune.tennis_all_noRank, data_validate_all,type = "class")
+table(prediction_pruned_all_noRank,data_validate_all$won_factor)
+
+# Plotting the pruned tree
+plot(prune.tennis_all_noRank)
+text(prune.tennis_all_noRank, pretty = 0)
+```
+The error is the same. :(
+
+
+
+
+
+
+
+
+--------------------------------------------------
+
+** Models with ALL predictors
+
+There are 11 predictors with our data
+
+```{r}
+
+tree.tennis_all = tree(won_factor ~ surface + hands + age_diff + ratio_ace_diff + ratio_1stIn_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted + ranks_diff + log_rankpts_diff + rankpts_diff, data=data_train_all)
+summary(tree.tennis_all)
+tree.tennis_all
+
+plot(tree.tennis_all)
+text(tree.tennis_all, pretty = 0)
+
+cv.tennis_all = cv.tree(tree.tennis_all, FUN = prune.misclass)
+plot(cv.tennis_all$size, cv.tennis_all$dev, type="b")
+
+```
+
+
+
+Now making prediction:
+```{r}
+prediction_all <- predict(tree.tennis_all, data_validate_all,type = "class") # gives the probability for each class
+#head(prediction)
+table(prediction_all,data_validate_all$won_factor)
+```
+
+So this is exactly a 50-50 split. Now let's prune:
+```{r}
+prune.tennis_all = prune.misclass(tree.tennis_all, best = 4)
+prediction_pruned_all <- predict(prune.tennis_all, data_validate_all,type = "class")
+table(prediction_pruned_all,data_validate_all$won_factor)
+
+plot(prune.tennis_all)
+text(prune.tennis_all, pretty=0)
+```
+
+Now the prediction accuracy is
+```{r}
+(18+2861)/(18+2861+26+2869)
+```
+
+
+
+
+
+----------------------------------------------------
+
+** Models with Just Rank_diff, log_rankpts, rankpts - all Players
+
+```{r}
+tree.tennis_all_onlyRank = tree(won_factor ~ ranks_diff + log_rankpts_diff + rankpts_diff , data=data_train_all)
+summary(tree.tennis_all_onlyRank)
+tree.tennis_all_onlyRank
+plot(tree.tennis_all_onlyRank)
+text(tree.tennis_all_onlyRank, pretty = 0)
+cv.tennis_all_onlyRank = cv.tree(tree.tennis_all_onlyRank, FUN = prune.misclass)
+plot(cv.tennis_all_onlyRank$size, cv.tennis_all_onlyRank$dev, type="b")
+```
+
+Prediction:
+```{r}
+prediction_onlyRank <- predict(tree.tennis_all_onlyRank, data_validate_all,type = "class") # gives the probability for each class
+#head(prediction)
+table(prediction_onlyRank,data_validate_all$won_factor)
+```
+This is the prediction accuracy for the model with rank_diff, rank_pts, and log(rank_pts)
+```{r}
+(58+2812)/(58+2812+75+2829)
+```
+
+From the table above, I can prune this to 4 nodes.
+```{r}
+prune.tennis_all_onlyRank = prune.misclass(tree.tennis_all_onlyRank, best = 4)
+prediction_pruned_all_onlyRank <- predict(prune.tennis_all_onlyRank, data_validate_all,type = "class")
+table(prediction_pruned_all_onlyRank,data_validate_all$won_factor)
+
+plot(prune.tennis_all_onlyRank)
+text(prune.tennis_all_onlyRank, pretty=0)
+```
+
+```{r}
+(109+2758)/(109+2758+2278+129)
+```
+
+
+
+
+
+
+------------------------------------------------------
+
+** Model With only rank_diff
+```{r}
+tree.tennis_all_onlyRankDiff = tree(won_factor ~ ranks_diff, data=data_train_all)
+summary(tree.tennis_all_onlyRankDiff)
+tree.tennis_all_onlyRankDiff
+plot(tree.tennis_all_onlyRankDiff)
+text(tree.tennis_all_onlyRankDiff, pretty = 0)
+```
+
+Prediction 
+```{r}
+prediction_onlyRankDiff <- predict(tree.tennis_all_onlyRank, data_validate_all,type = "class") # gives the probability for each class
+#head(prediction)
+table(prediction_onlyRankDiff,data_validate_all$won_factor)
+```
+
+
+This is the prediction accuracy for the model with just rank_diff
+```{r}
+(1959+1948)/(1959+1948+939+928)
+```
+
+So the models with only rank_diff get 67% accuracy.
+
+
+
+
+
+
+
+---------------------------------------------------------------
+
+** Model with Breakpoints, 1st won, and 2nd won
+
+```{r}
+tree.tennis_all_Bkpt1st2nd = tree(won_factor ~ avg_brkpt_converted + ratio_1stWon_diff + ratio_2ndWon_diff, data=data_train_all)
+summary(tree.tennis_all_Bkpt1st2nd)
+tree.tennis_all_Bkpt1st2nd
+plot(tree.tennis_all_Bkpt1st2nd)
+text(tree.tennis_all_Bkpt1st2nd, pretty = 0)
+
+cv.tennis_all_Bkpt1st2nd = cv.tree(tree.tennis_all_Bkpt1st2nd, FUN = prune.misclass)
+plot(cv.tennis_all_Bkpt1st2nd$size, cv.tennis_all_Bkpt1st2nd$dev, type="b")
+```
+
+```{r}
+prediction_Bkpt1st2nd <- predict(tree.tennis_all_Bkpt1st2nd, data_validate_all,type = "class") # gives the probability for each class
+#head(prediction)
+table(prediction_Bkpt1st2nd,data_validate_all$won_factor)
+```
+
+```{r}
+(803+2207)/(803+2207+2084+680)
+
+```
+
+Now I will prune down to 8 nodes:
+```{r}
+prune.tennis_all_Bkpt1st2nd = prune.misclass(tree.tennis_all_Bkpt1st2nd, best = 8)
+prediction_pruned_all_Bkpt1st2nd <- predict(prune.tennis_all_Bkpt1st2nd, data_validate_all,type = "class")
+table(prediction_pruned_all_Bkpt1st2nd,data_validate_all$won_factor)
+
+plot(prune.tennis_all_Bkpt1st2nd)
+text(prune.tennis_all_Bkpt1st2nd, pretty=0)
+```
+
+Now the prediction with the pruned tree is
+
+```{r}
+(803+2207)/(803+2207+680+2084)
+```
+
+
+
+
+
+
+--------------------------------------------------------
+** Model with 1stWon only
+
+```{r}
+# Make tree
+tree.tennis_all_1stWon = tree(won_factor ~ ratio_1stWon_diff, data=data_train_all)
+summary(tree.tennis_all_1stWon)
+tree.tennis_all_1stWon
+
+# plot tree
+plot(tree.tennis_all_1stWon)
+text(tree.tennis_all_1stWon, pretty = 0)
+
+
+# Make prediction on unpruned tree
+prediction_1stWon <- predict(tree.tennis_all_1stWon, data_validate_all,type = "class") # gives the
+table(prediction_1stWon,data_validate_all$won_factor)
+
+# Look at potential to prune
+cv.tennis_all_1stWon = cv.tree(tree.tennis_all_1stWon, FUN = prune.misclass)
+plot(cv.tennis_all_1stWon$size, cv.tennis_all_1stWon$dev, type="b")
+```
+
+Prediction accuracy with unpruned tree
+```{r}
+(1508+1833)/(1508+1833+1379+1054)
+```
+
+Silly, you can't prune a tree with 2 nodes...
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------
+** Model with only Breakpoints
+
+```{r}
+# Make tree
+tree.tennis_all_bkpt = tree(won_factor ~ avg_brkpt_converted, data=data_train_all)
+summary(tree.tennis_all_bkpt)
+tree.tennis_all_bkpt
+
+# plot tree
+plot(tree.tennis_all_bkpt)
+text(tree.tennis_all_bkpt, pretty = 0)
+
+
+# Make prediction on unpruned tree
+prediction_bkpt <- predict(tree.tennis_all_bkpt, data_validate_all,type = "class") # gives the
+table(prediction_bkpt,data_validate_all$won_factor)
+
+
+```
+
+Whoops, it doesn't think bkpt is significant enough to branch on.
+
+
+
+
+
+
+
+----------------------------------------------------------------
+** Model with Breakpt, 1stWon, 2ndWon, Aces, Age
+
+```{r}
+# Make tree
+tree.tennis_all_B12AA = tree(won_factor ~ age_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted + ratio_ace_diff, data=data_train_all)
+summary(tree.tennis_all_B12AA)
+tree.tennis_all_B12AA
+
+# plot tree
+plot(tree.tennis_all_B12AA)
+text(tree.tennis_all_B12AA, pretty = 0)
+
+
+# Make prediction on unpruned tree
+prediction_B12AA <- predict(tree.tennis_all_B12AA, data_validate_all,type = "class") # gives the
+table(prediction_B12AA,data_validate_all$won_factor)
+
+# Look at potential to prune
+cv.tennis_all_B12AA = cv.tree(tree.tennis_all_B12AA, FUN = prune.misclass)
+plot(cv.tennis_all_B12AA$size, cv.tennis_all_B12AA$dev, type="b")
+```
+
+Prediction accuracy:
+```{r}
+(803+2207)/(803+2207+2084+680)
+```
+
+
+
+
+-----------------------------------------------------------------
+** Individual Players
+
+So there may be predictors that have more weight for certain players. Like surface and stuff
+
+*** Roger Federer
+
+Loading Roger's data
+```{r}
+data_Federer_train <- read.csv("train_dataset20002013_1Jul15_roger.csv")
+#data_Federer_validate <- read.csv("valid_dataset20142015_roger.csv") # does not include breakpoint info
+data_Federer_validate<-p1constant(data_validate_all,"Roger Federer") # this function is inside GetAnotherPlayerData.R
+
+# make won into a factor
+data_Federer_train <- data_Federer_train %>% mutate(won_factor = factor(won))
+data_Federer_validate <- data_Federer_validate %>% mutate(won_factor = factor(won))
+
+# tree with all predictors
+tree.tennis_Federer = tree(won_factor ~ surface + hands + age_diff + ratio_ace_diff + ratio_1stIn_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted + ranks_diff + log_rankpts_diff, data=data_Federer_train)
+
+# tree without rank predictors, except keeping ranks_diff
+#tree.tennis_Federer = tree(won_factor ~ surface + hands + age_diff + ratio_ace_diff + ratio_1stIn_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted + ranks_diff, data=data_Federer_train)
+
+# tree without rank predictors
+#tree.tennis_Federer = tree(won_factor ~ surface + hands + age_diff + ratio_ace_diff + ratio_1stIn_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted, data=data_Federer_train)
+
+summary(tree.tennis_Federer)
+tree.tennis_Federer
+
+plot(tree.tennis_Federer)
+text(tree.tennis_Federer, pretty = 0)
+
+# Make prediction on unpruned tree
+prediction_Federer <- predict(tree.tennis_Federer, data_Federer_validate,type = "class") # gives the
+table(prediction_Federer,data_Federer_validate$won_factor)
+
+cv.tennis_Federer = cv.tree(tree.tennis_Federer, FUN = prune.misclass)
+plot(cv.tennis_Federer$size, cv.tennis_Federer$dev, type="b")
+
+
+```
+
+```{r}
+(115+10)/(115+10+13+19)
+```
+
+
+*** Rafael Nadal
+
+Loading Nadal's data
+```{r}
+#data_train_all <- read.csv("train_dataset20002013_1Jul15.csv")
+#data_Federer_validate <- read.csv("valid_dataset20142015_roger.csv") # does not include breakpoint info
+data_Nadal_train <- p1constant(data_train_all, "Rafael Nadal")
+data_Nadal_validate<-p1constant(data_validate_all,"Rafael Nadal") # this function is inside GetAnotherPlayerData.R
+
+# make won into a factor
+data_Nadal_train <- data_Nadal_train %>% mutate(won_factor = factor(won))
+data_Nadal_validate <- data_Nadal_validate %>% mutate(won_factor = factor(won))
+
+# tree with all predictors
+tree.tennis_Nadal = tree(won_factor ~ surface + hands + age_diff + ratio_ace_diff + ratio_1stIn_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted + ranks_diff + log_rankpts_diff + rankpts_diff, data=data_Nadal_train)
+
+# tree without rank predictors, except keeping ranks_diff
+#tree.tennis_Federer = tree(won_factor ~ surface + hands + age_diff + ratio_ace_diff + ratio_1stIn_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted + ranks_diff, data=data_Federer_train)
+
+# tree without rank predictors
+#tree.tennis_Nadal = tree(won_factor ~ surface + hands + age_diff + ratio_ace_diff + ratio_1stIn_diff + ratio_1stWon_diff + ratio_2ndWon_diff + avg_brkpt_converted, data=data_Nadal_train)
+
+summary(tree.tennis_Nadal)
+tree.tennis_Nadal
+
+plot(tree.tennis_Nadal)
+text(tree.tennis_Nadal, pretty = 0)
+
+# Make prediction on unpruned tree
+#prediction_Federer <- predict(tree.tennis_Federer, data_Federer_validate,type = "class") # gives the
+#table(prediction_Federer,data_Federer_validate$won_factor)
+
+#cv.tennis_Federer = cv.tree(tree.tennis_Federer, FUN = prune.misclass)
+#plot(cv.tennis_Federer$size, cv.tennis_Federer$dev, type="b")
+
+
+```
+
+
+** Predicting tomorrow's match
+
+```{r}
+#federer_newest <- test_dataset20162017 %>% filter(Player_1 == "Roger Federer" | Player_2 == "Roger Federer")
+data_raw_newest <- read.csv("raw_testdataset20162017.csv")
+federer_mostRecent1 <- data_raw_newest %>% filter(tourney_date == 20170116 & winner_name == "Roger Federer")
+federer_mostRecent2 <- test_dataset20162017 %>% filter(tourney_date == 20170116 & (Player_1 == "Roger Federer" | Player_2 == "Roger Federer"))
+
+cilic_mostRecent <- test_dataset20162017 %>% filter(Player_1 == "Marin Cilic" | Player_2 == "Marin Cilic")
+
+cilic_playingWawrinka <- cilic_mostRecent[70,]
+federer_playingWawrinka <- federer_mostRecent2[6,]
+
+agediff_federer_cilic <- cilic_playingWawrinka$age_diff - federer_playingWawrinka$age_diff # cilic minus federer
+ranksdiff_federer_cilic <- cilic_playingWawrinka$ranks_diff - federer_playingWawrinka$ranks_diff
+print(ranksdiff_federer_cilic) # cilic minus federer
+
+ratioacediff_federer_cilic <- cilic_playingWawrinka$ratio_ace_diff - federer_playingWawrinka$ratio_ace_diff
+
+names(data_Federer_train)
+
+```
+
+
+Putting together data row
+```{r}
+numeric_federer_playingWawrinka <- data.frame(federer_playingWawrinka$age_diff, federer_playingWawrinka$log_rankpts_diff, federer_playingWawrinka$rankpts_diff, federer_playingWawrinka$ranks_diff, federer_playingWawrinka$ratio_ace_diff, federer_playingWawrinka$ratio_1stIn_diff, federer_playingWawrinka$ratio_1stWon_diff, federer_playingWawrinka$ratio_2ndWon_diff, federer_playingWawrinka$avg_brkpt_converted)
+
+
+numeric_cilic_playingWawrinka <- data.frame(cilic_playingWawrinka$age_diff, cilic_playingWawrinka$log_rankpts_diff, cilic_playingWawrinka$rankpts_diff, cilic_playingWawrinka$ranks_diff, cilic_playingWawrinka$ratio_ace_diff, cilic_playingWawrinka$ratio_1stIn_diff, cilic_playingWawrinka$ratio_1stWon_diff, cilic_playingWawrinka$ratio_2ndWon_diff, cilic_playingWawrinka$avg_brkpt_converted)
+
+difference <- numeric_federer_playingWawrinka - numeric_cilic_playingWawrinka
+colnames(difference) <- c("age_diff", "log_rankpts_diff", "rankpts_diff", "ranks_diff", "ratio_ace_diff","ratio_1stIn_diff","ratio_1stWon_diff", "ratio_2ndWon_diff", "avg_brkpt_converted")
+
+gameTomorrow <- data.frame(X = 100, tourney_date = 20170716, match_num= 100, Player_1 = "Roger Federer", Player_2 = "Marin Cilic", surface = "Grass", hands = TRUE, difference, won = 0, won_factor = 0)
+
+ 
+```
+
+```{r}
+# Predicting wimbledon outcome without rank
+prediction_wimbledon_noRank <- predict(tree.tennis_all_noRank, gameTomorrow,type = "class") # gives the probability 
+prediction_wimbledon_1stWon <- predict(tree.tennis_all_1stWon, gameTomorrow, type="class")
+prediction_wimbledon_onlyRankDiff <- predict(tree.tennis_all_onlyRankDiff, gameTomorrow, type = "class")
+prediction_wimbledon_all <- predict(tree.tennis_all, gameTomorrow, type="class")
+
+prediction_wimbledon_noRank
+prediction_wimbledon_1stWon
+prediction_wimbledon_onlyRankDiff
+prediction_wimbledon_all
+```

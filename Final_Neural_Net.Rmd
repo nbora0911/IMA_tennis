@@ -1,0 +1,217 @@
+---
+title: "Final Neural Network"
+author: "Dara Zirlin"
+date: "July 23, 2017"
+output: html_document
+---
+
+# Load needed packages and csv files
+```{r}
+
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(mosaic))
+suppressPackageStartupMessages(library(neuralnet))
+
+
+
+setwd('C:/Users/DaraZ/Documents/IMA/tennis')
+train <- read.csv('train_dataset20002013_1Jul15.csv')
+
+valid<- read.csv('valid_dataset20142015_1Jul15.csv')
+
+test<-read.csv('test_dataset20162017.csv')
+all<-rbind(train,valid,test)
+
+train<-train%>%mutate_if(is.factor,as.character)
+valid<-valid%>%mutate_if(is.factor,as.character)
+test<-test%>%mutate_if(is.factor,as.character)
+
+train<-na.omit(train)
+valid<-na.omit(valid)
+test<-na.omit(test)
+
+valid[valid==""]<-NA
+```
+
+
+# Needed functions
+```{r}
+
+#This function outputs player as player1
+p1constant <- function(traindata,player){
+  p1data <- traindata %>% filter(Player_1 == player | Player_2 == player)
+
+for(p in  1:nrow(p1data)){  
+  if (p1data[p,]$Player_2 == player){
+  a=p1data[p,]$Player_1
+  b=p1data[p,]$Player_2
+  
+  p1data[p,]$Player_1=b
+  p1data[p,]$Player_2=a
+  
+  if (p1data[p,]$won == 0){p1data[p,]$won=1} else {p1data[p,]$won=0}
+ 
+  
+ colns1 <- c('age_diff', 'rankpts_diff', 'ranks_diff','ratio_ace_diff','ratio_1stIn_diff','ratio_1stWon_diff','ratio_2ndWon_diff')
+  
+ p1data[p,colns1 ]=-p1data[p,colns1 ]
+  }
+}
+  return(p1data)
+}
+
+
+
+
+
+
+```
+
+# specific player data
+```{r}
+roger<-p1constant(train,"Roger Federer")
+roger_valid<-p1constant(valid,"Roger Federer")
+roger_test<-p1constant(test,"Roger Federer")
+
+
+andy<-p1constant(train,"Andy Murray")
+andy_valid<-p1constant(valid,"Andy Murray")
+andy_test<-p1constant(test,"Andy Murray")
+
+
+
+nadal<-p1constant(train,"Rafael Nadal")
+nadal_valid<-p1constant(valid,"Rafael Nadal")
+nadal_test<-p1constant(test,"Rafael Nadal")
+
+```
+
+
+
+# General neural net
+```{r}
+# stores values for different numbers of nodes in the hidden level
+a<-c()
+
+# Loops through possibilities for the number of nodes in the hidden level
+# Large numbers of nodes don't run fast for this data
+for(i in 1:1){
+  
+  # Compute Neural Net
+  n <- names(train)
+  f <- as.formula(  won~ranks_diff+rankpts_diff+ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff+avg_brkpt_converted)
+  nn <- neuralnet(f,data=train,hidden=c(i),linear.output=T)
+  
+  # Compute probabilities from neural net
+pr.nn <- compute(nn,valid[,c('ranks_diff','rankpts_diff','ratio_1stWon_diff','ratio_2ndWon_diff','ratio_ace_diff','avg_brkpt_converted')])
+  
+  
+ 
+ # Calculate the proportion predicted correctly 
+  b=1-sum((valid$won-((pr.nn$net.result)>.5))^2)/length(valid$won)
+  
+  
+  
+  a=append(a,b)
+
+}
+
+a
+
+
+```
+
+
+
+# Roger Federer Neural Net
+```{r}
+# stores values for different numbers of nodes in the hidden level
+a<-c()
+
+
+# Loops through possibilities for the number of nodes in the hidden level
+for(i in 1:6){
+  
+  # Compute Neural Net
+  n <- names(roger)
+  f <- as.formula(  won~rankpts_diff+ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff+age_diff)
+  nn <- neuralnet(f,data=roger,hidden=c(i),linear.output=T)
+  
+ # Compute probabilities from neural net
+pr.nn <- compute(nn,roger_valid[,c('rankpts_diff','ratio_1stWon_diff','ratio_2ndWon_diff','ratio_ace_diff','age_diff')])
+  
+  
+  
+   # Calculate the proportion predicted correctly 
+  b=1-sum((roger_valid$won-((pr.nn$net.result)>.5))^2)/length(roger_valid$won)
+  
+  a=append(a,b)
+  
+}
+
+a
+
+```
+
+
+
+# Andy Murray Neural Net
+```{r}
+# stores values for different numbers of nodes in the hidden level
+a<-c()
+
+# Loops through possibilities for the number of nodes in the hidden level
+for(i in 1:6){
+  
+  # Compute Neural Net
+  n <- names(andy)
+  f <- as.formula(  won~rankpts_diff+ratio_1stWon_diff+ratio_2ndWon_diff+ratio_ace_diff)
+  nn <- neuralnet(f,data=andy,hidden=c(i),linear.output=T)
+  
+  # Compute probabilities from neural net
+pr.nn <- compute(nn,andy_valid[,c('rankpts_diff','ratio_1stWon_diff','ratio_2ndWon_diff','ratio_ace_diff')])
+  
+  
+  #test on valid
+  
+  
+  b=1-sum((andy_valid$won-((pr.nn$net.result)>.5))^2)/length(andy_valid$won)
+  
+  a=append(a,b)
+  
+}
+
+a
+
+```
+
+# Rafael Nadal Neural Net
+```{r}
+
+# stores values for different numbers of nodes in the hidden level
+a<-c()
+
+# Loops through possibilities for the number of nodes in the hidden level
+for(i in 1:6){
+  
+  # Compute Neural Net
+  n <- names(nadal)
+  f <- as.formula(  won~rankpts_diff+age_diff)
+  nn <- neuralnet(f,data=andy,hidden=c(i),linear.output=T)
+  
+  # Compute probabilities from neural net
+pr.nn <- compute(nn,nadal_valid[,c('rankpts_diff','age_diff')])
+  
+  
+  #test on valid
+  
+  # Calculate the proportion predicted correctly 
+  b=1-sum((nadal_valid$won-((pr.nn$net.result)>.5))^2)/length(nadal_valid$won)
+  
+  a=append(a,b)
+
+}
+
+a
+```
